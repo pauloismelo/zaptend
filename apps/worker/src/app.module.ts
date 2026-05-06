@@ -2,6 +2,11 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { BullModule } from '@nestjs/bullmq'
 import { MessagesInboundProcessor } from './processors/messages-inbound.processor'
+import { PrismaService } from './prisma/prisma.service'
+import { MetaApiService } from './services/meta-api.service'
+import { S3Service } from './services/s3.service'
+import { SocketEmitterService } from './services/socket-emitter.service'
+import { RoutingService } from './services/routing.service'
 
 export const QUEUE_MESSAGES_INBOUND = 'messages-inbound'
 export const QUEUE_MESSAGES_OUTBOUND = 'messages-outbound'
@@ -29,6 +34,13 @@ export const QUEUE_BILLING = 'billing'
       { name: QUEUE_BILLING },
     ),
   ],
-  providers: [MessagesInboundProcessor],
+  providers: [
+    PrismaService,
+    MetaApiService,
+    S3Service,
+    SocketEmitterService,
+    RoutingService,
+    MessagesInboundProcessor,
+  ],
 })
 export class AppModule {}
