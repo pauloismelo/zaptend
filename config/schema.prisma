@@ -1,0 +1,462 @@
+// ZapTend — Prisma Schema v1.0
+// Banco: PostgreSQL (AWS Aurora)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// BILLING / PLANOS
+// ─────────────────────────────────────────────
+
+enum PlanType {
+  starter
+  growth
+  pro
+  enterprise
+  trial
+}
+
+enum SubscriptionStatus {
+  active
+  trialing
+  past_due
+  canceled
+  unpaid
+}
+
+// ─────────────────────────────────────────────
+// TENANT
+// ─────────────────────────────────────────────
+
+model Tenant {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  email       String
+  logoUrl     String?
+  timezone    String   @default("America/Sao_Paulo")
+  locale      String   @default("pt-BR")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  users            User[]
+  whatsappConfigs  WhatsAppConfig[]
+  contacts         Contact[]
+  conversations    Conversation[]
+  messages         Message[]
+  departments      Department[]
+  templates        QuickReply[]
+  automationFlows  AutomationFlow[]
+  subscription     Subscription?
+  usageRecords     UsageRecord[]
+  apiKeys          ApiKey[]
+
+  @@index([slug])
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  tenantId               String             @unique
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id])
+  stripeCustomerId       String             @unique
+  stripeSubscriptionId   String?            @unique
+  plan                   PlanType
+  status                 SubscriptionStatus
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  trialEndsAt            DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  month          String   // "2026-04"
+  conversations  Int      @default(0)
+  broadcasts     Int      @default(0)
+  aiRequests     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, month])
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// USUÁRIOS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  agent
+  supervisor
+  admin
+  owner
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  email        String
+  name         String
+  avatarUrl    String?
+  role         UserRole  @default(agent)
+  passwordHash String
+  isOnline     Boolean   @default(false)
+  lastSeenAt   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  departments        Department[]         @relation("UserDepartments")
+  assignedConversations Conversation[]
+  sentMessages       Message[]
+  notes              InternalNote[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, isOnline])
+}
+
+// ─────────────────────────────────────────────
+// WHATSAPP CONFIG
+// ─────────────────────────────────────────────
+
+model WhatsAppConfig {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+  phoneNumberId          String   @unique  // Meta phone_number_id
+  wabaId                 String   // WhatsApp Business Account ID
+  phoneNumber            String
+  displayName            String
+  accessTokenEncrypted   String   // Criptografado com KMS
+  webhookVerifyToken     String   @unique
+  isActive               Boolean  @default(true)
+  botEnabled             Boolean  @default(false)
+  botSystemPrompt        String?
+  businessHoursEnabled   Boolean  @default(false)
+  businessHours          Json?    // { mon: { start: "09:00", end: "18:00", enabled: true }, ... }
+  awayMessage            String?
+  welcomeMessage         String?
+  csatEnabled            Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// DEPARTAMENTOS
+// ─────────────────────────────────────────────
+
+model Department {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  description String?
+  color       String?  @default("#00B37E")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agents        User[]         @relation("UserDepartments")
+  conversations Conversation[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// CONTATOS
+// ─────────────────────────────────────────────
+
+model Contact {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  phone        String
+  name         String?
+  email        String?
+  company      String?
+  avatarUrl    String?
+  tags         String[]
+  customFields Json?     // { cpf: "123", cargo: "Gerente" }
+  isBlocked    Boolean   @default(false)
+  optedOut     Boolean   @default(false)  // STOP — nunca enviar broadcast
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  conversations Conversation[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([tenantId, phone])
+}
+
+// ─────────────────────────────────────────────
+// CONVERSAS
+// ─────────────────────────────────────────────
+
+enum ConversationStatus {
+  open
+  attending
+  waiting_customer
+  resolved
+  spam
+}
+
+enum ConversationChannel {
+  whatsapp
+}
+
+model Conversation {
+  id               String              @id @default(cuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  contactId        String
+  contact          Contact             @relation(fields: [contactId], references: [id])
+  assignedUserId   String?
+  assignedUser     User?               @relation(fields: [assignedUserId], references: [id])
+  departmentId     String?
+  department       Department?         @relation(fields: [departmentId], references: [id])
+  channel          ConversationChannel @default(whatsapp)
+  status           ConversationStatus  @default(open)
+  subject          String?
+  tags             String[]
+  pipelineStage    String?
+  pipelineValue    Decimal?
+  isBot            Boolean             @default(false)
+  slaDeadline      DateTime?
+  slaBreached      Boolean             @default(false)
+  csatScore        Int?                // 1-5
+  csatRespondedAt  DateTime?
+  lastMessageAt    DateTime?
+  lastAssignedAt   DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  messages      Message[]
+  notes         InternalNote[]
+  events        ConversationEvent[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, assignedUserId])
+  @@index([tenantId, contactId])
+  @@index([tenantId, lastMessageAt])
+}
+
+// ─────────────────────────────────────────────
+// MENSAGENS
+// ─────────────────────────────────────────────
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageType {
+  text
+  image
+  audio
+  video
+  document
+  location
+  contact
+  sticker
+  reaction
+  template
+  interactive
+  system
+  unsupported
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+}
+
+model Message {
+  id               String           @id @default(cuid())
+  tenantId         String
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  conversationId   String
+  conversation     Conversation     @relation(fields: [conversationId], references: [id])
+  waMessageId      String?          @unique  // ID da mensagem no WhatsApp
+  direction        MessageDirection
+  type             MessageType
+  content          String?          // texto ou transcrição
+  mediaUrl         String?          // URL no S3
+  mediaType        String?
+  mediaSize        Int?
+  mediaFilename    String?
+  latitude         Float?
+  longitude        Float?
+  templateName     String?
+  reactionEmoji    String?
+  replyToId        String?
+  status           MessageStatus    @default(pending)
+  sentBy           String?          // userId se enviado por agente
+  sentByUser       User?            @relation(fields: [sentBy], references: [id])
+  isBot            Boolean          @default(false)
+  sentiment        String?          // positive | neutral | negative | urgent
+  sentimentScore   Float?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  readAt           DateTime?
+  failedAt         DateTime?
+  failureReason    String?
+  createdAt        DateTime         @default(now())
+
+  @@index([conversationId])
+  @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// NOTAS INTERNAS
+// ─────────────────────────────────────────────
+
+model InternalNote {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+}
+
+// ─────────────────────────────────────────────
+// TIMELINE DE EVENTOS
+// ─────────────────────────────────────────────
+
+model ConversationEvent {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  type           String       // assigned | transferred | status_changed | tag_added | bot_handoff
+  actorId        String?      // userId que realizou a ação
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+// ─────────────────────────────────────────────
+// RESPOSTAS RÁPIDAS
+// ─────────────────────────────────────────────
+
+model QuickReply {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  content   String
+  category  String?
+  mediaUrl  String?
+  isShared  Boolean  @default(true)  // visível para todos os agentes
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// AUTOMAÇÃO / FLOWS
+// ─────────────────────────────────────────────
+
+model AutomationFlow {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  description String?
+  trigger     String   // new_conversation | keyword | schedule | field_changed
+  triggerConfig Json?  // { keyword: "oi", matchType: "contains" }
+  nodes       Json     // array de nós do flow builder
+  isActive    Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, isActive])
+}
+
+// ─────────────────────────────────────────────
+// BROADCASTS
+// ─────────────────────────────────────────────
+
+enum BroadcastStatus {
+  draft
+  scheduled
+  running
+  completed
+  failed
+  cancelled
+}
+
+model Broadcast {
+  id               String          @id @default(cuid())
+  tenantId         String
+  name             String
+  templateName     String
+  templateVariables Json?
+  segmentFilters   Json?           // { tags: ["lead"], fields: { plano: "premium" } }
+  recipientCount   Int             @default(0)
+  sentCount        Int             @default(0)
+  deliveredCount   Int             @default(0)
+  readCount        Int             @default(0)
+  failedCount      Int             @default(0)
+  status           BroadcastStatus @default(draft)
+  scheduledAt      DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdBy        String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([tenantId, status])
+}
+
+// ─────────────────────────────────────────────
+// API KEYS (para clientes com plano Pro+)
+// ─────────────────────────────────────────────
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  name        String
+  keyHash     String    @unique  // SHA256 da key
+  prefix      String             // Primeiros 8 chars para identificação
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+}

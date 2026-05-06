@@ -1,0 +1,283 @@
+name: ZapTend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  AWS_REGION: sa-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.sa-east-1.amazonaws.com
+
+jobs:
+  # ──────────────────────────────────────────
+  # 1. Quality Gate (todos os PRs e pushes)
+  # ──────────────────────────────────────────
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test --coverage
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          REDIS_URL: redis://localhost:6379
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+  # ──────────────────────────────────────────
+  # 2. E2E Tests (apenas em PRs para main)
+  # ──────────────────────────────────────────
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.base_ref == 'main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Run E2E
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-for-ci
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: zaptend_test
+        ports: ['5432:5432']
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+  # ──────────────────────────────────────────
+  # 3. Build & Push para ECR (develop → staging)
+  # ──────────────────────────────────────────
+  build-staging:
+    name: Build → Staging
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    strategy:
+      matrix:
+        app: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/zaptend-${{ matrix.app }}:staging
+            ${{ env.ECR_REGISTRY }}/zaptend-${{ matrix.app }}:${{ github.sha }}
+          build-args: |
+            APP=${{ matrix.app }}
+
+  # ──────────────────────────────────────────
+  # 4. Deploy Staging
+  # ──────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    runs-on: ubuntu-latest
+    needs: build-staging
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run database migrations
+        run: |
+          aws ecs run-task \
+            --cluster zaptend-staging \
+            --task-definition zaptend-migrate-staging \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_IDS }}],securityGroups=[${{ secrets.SG_ID }}]}" \
+            --wait
+
+      - name: Deploy API to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/staging/api-task.json
+          service: zaptend-api-staging
+          cluster: zaptend-staging
+          wait-for-service-stability: true
+          image: ${{ env.ECR_REGISTRY }}/zaptend-api:${{ github.sha }}
+
+      - name: Deploy Worker to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/staging/worker-task.json
+          service: zaptend-worker-staging
+          cluster: zaptend-staging
+          wait-for-service-stability: true
+          image: ${{ env.ECR_REGISTRY }}/zaptend-worker:${{ github.sha }}
+
+      - name: Deploy Web to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/staging/web-task.json
+          service: zaptend-web-staging
+          cluster: zaptend-staging
+          wait-for-service-stability: true
+          image: ${{ env.ECR_REGISTRY }}/zaptend-web:${{ github.sha }}
+
+      - name: Smoke test staging
+        run: |
+          curl -f https://api.staging.zaptend.com.br/health || exit 1
+          echo "✅ Staging deploy OK"
+
+  # ──────────────────────────────────────────
+  # 5. Build & Deploy Produção (main apenas)
+  # ──────────────────────────────────────────
+  build-prod:
+    name: Build → Production
+    runs-on: ubuntu-latest
+    needs: [quality, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    strategy:
+      matrix:
+        app: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push ${{ matrix.app }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/zaptend-${{ matrix.app }}:latest
+            ${{ env.ECR_REGISTRY }}/zaptend-${{ matrix.app }}:${{ github.sha }}
+
+  deploy-prod:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    needs: build-prod
+    environment: production  # Requer aprovação manual no GitHub
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run database migrations
+        run: |
+          aws ecs run-task \
+            --cluster zaptend-prod \
+            --task-definition zaptend-migrate-prod \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PROD_SUBNET_IDS }}],securityGroups=[${{ secrets.PROD_SG_ID }}]}" \
+            --wait
+
+      - name: Deploy API (Blue/Green)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/prod/api-task.json
+          service: zaptend-api-prod
+          cluster: zaptend-prod
+          wait-for-service-stability: true
+          codedeploy-appspec: deploy/codedeploy/api-appspec.json
+          codedeploy-application: zaptend-api
+          codedeploy-deployment-group: zaptend-api-prod
+          image: ${{ env.ECR_REGISTRY }}/zaptend-api:${{ github.sha }}
+
+      - name: Deploy Worker
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/prod/worker-task.json
+          service: zaptend-worker-prod
+          cluster: zaptend-prod
+          wait-for-service-stability: true
+          image: ${{ env.ECR_REGISTRY }}/zaptend-worker:${{ github.sha }}
+
+      - name: Deploy Web
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: deploy/ecs/prod/web-task.json
+          service: zaptend-web-prod
+          cluster: zaptend-prod
+          wait-for-service-stability: true
+          image: ${{ env.ECR_REGISTRY }}/zaptend-web:${{ github.sha }}
+
+      - name: Smoke test production
+        run: |
+          curl -f https://api.zaptend.com.br/health || exit 1
+          echo "✅ Production deploy OK"
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: "Deploy automático — commit ${{ github.sha }}"

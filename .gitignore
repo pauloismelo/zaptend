@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+.next/
+build/
+*.tsbuildinfo
+*.js.map
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Turbo cache
+.turbo/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Prisma generated
+prisma/migrations/dev/
+
+# claude
+claude/
+agents/
+CLAUDE.md
