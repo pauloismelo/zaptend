@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
 import { AuthModule } from './modules/auth/auth.module'
 import { WhatsAppConfigModule } from './modules/whatsapp-config/whatsapp-config.module'
+import { WebhookModule } from './modules/webhook/webhook.module'
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { WhatsAppConfigModule } from './modules/whatsapp-config/whatsapp-config.
     PrismaModule,
     AuthModule,
     WhatsAppConfigModule,
+    WebhookModule,
     // Feature modules são adicionados aqui conforme criados:
     // UsersModule,
     // ContactsModule,
@@ -29,7 +31,6 @@ import { WhatsAppConfigModule } from './modules/whatsapp-config/whatsapp-config.
     // MessagesModule,
     // DepartmentsModule,
     // WhatsAppModule,
-    // WebhooksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

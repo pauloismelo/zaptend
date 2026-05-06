@@ -49,7 +49,7 @@ Leia o CLAUDE.md e o agents/backend.md. Implemente o middleware TenantContextMid
 Leia o CLAUDE.md e o agents/frontend.md. Implemente as páginas de autenticação em apps/web: /login (email + senha), /register (nome, empresa, email, senha, confirmação). Crie a store de auth em stores/auth.store.ts com Zustand contendo: user, tenant, accessToken, isLoading, login(), logout(), refreshToken(). Configure o interceptor de axios em lib/api/client.ts para injetar o token e fazer refresh automático quando receber 401. Use React Hook Form + Zod para validação dos formulários. Crie auth.store.spec.ts e os testes dos formulários.
 ```
 
----------------------------------------------------
+---
 
 ## Fase 2 — Integração WhatsApp
 > Webhook, processamento de mensagens e envio. Núcleo do produto.
@@ -78,7 +78,7 @@ Leia o CLAUDE.md, agents/backend.md e skills/domain-skills.md (seção WhatsApp 
 Leia o CLAUDE.md e agents/backend.md. Implemente o worker de mensagens em apps/worker/src/processors/message-inbound.processor.ts. O worker deve: 1) Receber job da fila messages-inbound, 2) Fazer upsert do Contact pelo telefone + tenantId, 3) Buscar ou criar Conversation com o contato, 4) Criar a Message no banco com direction=inbound e todos os campos, 5) Para mídia (image, audio, video, document): baixar da Meta API e fazer upload para S3, salvar URL permanente, 6) Emitir evento Socket.io para agentes online, 7) Aplicar regra de roteamento automático se conversa não atribuída. Crie testes spec.
 ```
 
----
+---------------------------------------------------
 
 ### Prompt 09 — WhatsAppService: enviar mensagens
 
