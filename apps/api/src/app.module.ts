@@ -11,6 +11,9 @@ import { AuthModule } from './modules/auth/auth.module'
 import { WhatsAppConfigModule } from './modules/whatsapp-config/whatsapp-config.module'
 import { WebhookModule } from './modules/webhook/webhook.module'
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module'
+import { ConversationsModule } from './modules/conversations/conversations.module'
+import { MessagesModule } from './modules/messages/messages.module'
+import { GatewaysModule } from './gateways/gateways.module'
 
 @Module({
   imports: [
@@ -26,11 +29,12 @@ import { WhatsAppModule } from './modules/whatsapp/whatsapp.module'
     WhatsAppConfigModule,
     WebhookModule,
     WhatsAppModule,
+    ConversationsModule,
+    MessagesModule,
+    GatewaysModule,
     // Feature modules são adicionados aqui conforme criados:
     // UsersModule,
     // ContactsModule,
-    // ConversationsModule,
-    // MessagesModule,
     // DepartmentsModule,
   ],
   providers: [

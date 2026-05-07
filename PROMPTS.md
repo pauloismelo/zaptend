@@ -78,7 +78,7 @@ Leia o CLAUDE.md, agents/backend.md e skills/domain-skills.md (seção WhatsApp 
 Leia o CLAUDE.md e agents/backend.md. Implemente o worker de mensagens em apps/worker/src/processors/message-inbound.processor.ts. O worker deve: 1) Receber job da fila messages-inbound, 2) Fazer upsert do Contact pelo telefone + tenantId, 3) Buscar ou criar Conversation com o contato, 4) Criar a Message no banco com direction=inbound e todos os campos, 5) Para mídia (image, audio, video, document): baixar da Meta API e fazer upload para S3, salvar URL permanente, 6) Emitir evento Socket.io para agentes online, 7) Aplicar regra de roteamento automático se conversa não atribuída. Crie testes spec.
 ```
 
----------------------------------------------------
+---
 
 ### Prompt 09 — WhatsAppService: enviar mensagens
 
@@ -123,7 +123,7 @@ Leia o CLAUDE.md e agents/frontend.md. Implemente o layout principal do tenant e
 Leia o CLAUDE.md e agents/frontend.md. Implemente a página do inbox em apps/web/src/app/(tenant)/[slug]/inbox. Deve ter: painel esquerdo com lista de conversas (filtros por status/departamento/tag, busca, ordenado por lastMessageAt), painel central com o chat da conversa selecionada (histórico de mensagens, campo de envio com suporte a emoji, anexos e atalho / para respostas rápidas, indicadores de status de mensagem), painel direito com detalhes do contato. Use Zustand stores para estado. Ícones com lucide-react. Estilize com Tailwind seguindo o design system dark mode do agents/frontend.md. Crie spec para todos os componentes.
 ```
 
----
+---------------------------------------------------
 
 ## Fase 4 — CRM e Equipe
 > Contatos, usuários e departamentos. Pode rodar em paralelo com Fase 5.
