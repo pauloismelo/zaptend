@@ -13,7 +13,10 @@ import { WebhookModule } from './modules/webhook/webhook.module'
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module'
 import { ConversationsModule } from './modules/conversations/conversations.module'
 import { MessagesModule } from './modules/messages/messages.module'
+import { ContactsModule } from './modules/contacts/contacts.module'
 import { GatewaysModule } from './gateways/gateways.module'
+import { UsersModule } from './modules/users/users.module'
+import { DepartmentsModule } from './modules/departments/departments.module'
 
 @Module({
   imports: [
@@ -31,11 +34,10 @@ import { GatewaysModule } from './gateways/gateways.module'
     WhatsAppModule,
     ConversationsModule,
     MessagesModule,
+    ContactsModule,
     GatewaysModule,
-    // Feature modules são adicionados aqui conforme criados:
-    // UsersModule,
-    // ContactsModule,
-    // DepartmentsModule,
+    UsersModule,
+    DepartmentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
