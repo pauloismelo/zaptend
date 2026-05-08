@@ -40,6 +40,11 @@ coverage/
 prisma/migrations/dev/
 
 # claude
-claude/
+.claude/
 agents/
 CLAUDE.md
+
+#codex
+.codex/
+skills/
+AGENTS.md

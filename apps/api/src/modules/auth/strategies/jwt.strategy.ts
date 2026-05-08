@@ -21,11 +21,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<JwtPayload> {
     const user = await this.prisma.user.findFirst({
       where: { id: payload.sub, tenantId: payload.tenantId, isActive: true, deletedAt: null },
-      select: { id: true },
+      select: { id: true, tenant: { select: { status: true } } },
     })
 
     if (!user) {
       throw new UnauthorizedException('Usuário não encontrado ou inativo')
+    }
+    if (user.tenant.status === 'suspended') {
+      throw new UnauthorizedException('Tenant suspenso por pendência de assinatura')
     }
 
     return payload

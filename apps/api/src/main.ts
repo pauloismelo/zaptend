@@ -39,6 +39,7 @@ async function bootstrap() {
     .addTag('conversations', 'Conversas')
     .addTag('messages', 'Mensagens')
     .addTag('departments', 'Departamentos')
+    .addTag('billing', 'Assinaturas e faturamento')
     .addTag('whatsapp', 'Configuração WhatsApp')
     .addTag('webhooks', 'Webhooks Meta')
     .build()

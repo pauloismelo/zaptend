@@ -123,7 +123,7 @@ Leia o CLAUDE.md e agents/frontend.md. Implemente o layout principal do tenant e
 Leia o CLAUDE.md e agents/frontend.md. Implemente a página do inbox em apps/web/src/app/(tenant)/[slug]/inbox. Deve ter: painel esquerdo com lista de conversas (filtros por status/departamento/tag, busca, ordenado por lastMessageAt), painel central com o chat da conversa selecionada (histórico de mensagens, campo de envio com suporte a emoji, anexos e atalho / para respostas rápidas, indicadores de status de mensagem), painel direito com detalhes do contato. Use Zustand stores para estado. Ícones com lucide-react. Estilize com Tailwind seguindo o design system dark mode do agents/frontend.md. Crie spec para todos os componentes.
 ```
 
----------------------------------------------------
+---
 
 ## Fase 4 — CRM e Equipe
 > Contatos, usuários e departamentos. Pode rodar em paralelo com Fase 5.
@@ -181,7 +181,7 @@ Leia o CLAUDE.md e agents/whatsapp-infra-billing-reviewer.md (seção Billing). 
 Leia o CLAUDE.md e agents/frontend.md. Implemente a página de billing em apps/web/src/app/(tenant)/[slug]/settings/billing: exibição do plano atual, data de renovação, uso do mês (conversas, broadcasts) com barra de progresso, botão de upgrade com redirecionamento para checkout Stripe, histórico de faturas, botão de cancelamento. Crie billing.store.ts com Zustand. Use lucide-react e Tailwind. Crie spec para os componentes e a store.
 ```
 
----
+---------------------------------------------------
 
 ## Fase 6 — Features Avançadas
 > Kanban, broadcasts e automações.

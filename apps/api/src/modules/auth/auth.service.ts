@@ -39,6 +39,7 @@ export class AuthService {
         slug: dto.tenantSlug,
         name: dto.tenantName,
         email: dto.email,
+        status: 'trialing',
         users: {
           create: { email: dto.email, name: dto.name, passwordHash, role: 'owner' },
         },
@@ -58,6 +59,9 @@ export class AuthService {
     })
     if (!tenant) {
       throw new UnauthorizedException('Credenciais inválidas')
+    }
+    if (tenant.status === 'suspended') {
+      throw new UnauthorizedException('Tenant suspenso por pendência de assinatura')
     }
 
     const user = await this.prisma.user.findFirst({

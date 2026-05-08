@@ -17,6 +17,7 @@ import { ContactsModule } from './modules/contacts/contacts.module'
 import { GatewaysModule } from './gateways/gateways.module'
 import { UsersModule } from './modules/users/users.module'
 import { DepartmentsModule } from './modules/departments/departments.module'
+import { BillingModule } from './modules/billing/billing.module'
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { DepartmentsModule } from './modules/departments/departments.module'
     GatewaysModule,
     UsersModule,
     DepartmentsModule,
+    BillingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
