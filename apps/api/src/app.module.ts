@@ -22,6 +22,8 @@ import { QuickRepliesModule } from './modules/quick-replies/quick-replies.module
 import { BroadcastsModule } from './modules/broadcasts/broadcasts.module'
 import { AutomationsModule } from './modules/automations/automations.module'
 import { AiModule } from './modules/ai/ai.module'
+import { ReportsModule } from './modules/reports/reports.module'
+import { SuperAdminModule } from './modules/super-admin/super-admin.module'
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { AiModule } from './modules/ai/ai.module'
     BroadcastsModule,
     AutomationsModule,
     AiModule,
+    ReportsModule,
+    SuperAdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

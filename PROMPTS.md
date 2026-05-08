@@ -247,7 +247,7 @@ Leia o CLAUDE.md e agents/backend.md. Implemente o Mood AI: integre o analyzeSen
 Leia o CLAUDE.md e agents/backend.md. Implemente o AI Co-Pilot: endpoint POST /conversations/:id/ai/suggest que retorna sugestão de resposta baseada no histórico da conversa, endpoint POST /conversations/:id/ai/summarize que retorna resumo em 3 bullets, endpoint POST /conversations/:id/ai/intent que retorna a intenção detectada (suporte, compra, cancelamento, reclamação, dúvida). Aplique @RequireFeature('aiCopilot'). Integre os três na UI do inbox: botão "Sugerir resposta" no campo de chat que preenche o textarea, botão "Resumir" no painel lateral. Crie testes spec.
 ```
 
----------------------------------------------------
+---
 
 ## Fase 8 — Dashboard e Super Admin
 > Métricas, relatórios e painel de gestão de tenants.
@@ -276,7 +276,7 @@ Leia o CLAUDE.md e agents/frontend.md. Implemente o dashboard principal em apps/
 Leia o CLAUDE.md e agents/backend.md. Implemente o módulo de Super Admin em apps/api/src/modules/super-admin (role: system_admin, separado dos tenants): GET /admin/tenants (lista com filtros, paginação), GET /admin/tenants/:id (detalhes, uso, subscription), PATCH /admin/tenants/:id/status (ativar/suspender), GET /admin/metrics (MRR total, tenants ativos, crescimento), GET /admin/usage (uso por tenant no mês). Implemente autenticação separada para o super admin (email @zaptend.com.br). Crie DTOs, Swagger e testes spec.
 ```
 
----
+---------------------------------------------------
 
 ## Fase 9 — Deploy e Segurança
 > Docker, CI/CD e auditoria final antes de ir a produção.

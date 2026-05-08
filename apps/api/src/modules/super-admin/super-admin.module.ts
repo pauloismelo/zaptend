@@ -1,0 +1,12 @@
+import { Module } from '@nestjs/common'
+import { PrismaModule } from '../../prisma/prisma.module'
+import { SuperAdminController } from './super-admin.controller'
+import { SuperAdminGuard } from './guards/super-admin.guard'
+import { SuperAdminService } from './super-admin.service'
+
+@Module({
+  imports: [PrismaModule],
+  controllers: [SuperAdminController],
+  providers: [SuperAdminService, SuperAdminGuard],
+})
+export class SuperAdminModule {}
