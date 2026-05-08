@@ -9,6 +9,7 @@ import { SocketEmitterService } from './services/socket-emitter.service'
 import { RoutingService } from './services/routing.service'
 import { BroadcastProcessor } from './processors/broadcast.processor'
 import { AutomationEngineService } from './services/automation-engine.service'
+import { WorkerAiService } from './services/ai.service'
 
 export const QUEUE_MESSAGES_INBOUND = 'messages-inbound'
 export const QUEUE_MESSAGES_OUTBOUND = 'messages-outbound'
@@ -45,6 +46,7 @@ export const QUEUE_BROADCAST_SEND = 'broadcast-send'
     SocketEmitterService,
     RoutingService,
     AutomationEngineService,
+    WorkerAiService,
     MessagesInboundProcessor,
     BroadcastProcessor,
   ],

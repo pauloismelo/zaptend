@@ -218,7 +218,7 @@ Leia o CLAUDE.md e agents/backend.md. Implemente o módulo de broadcasts em apps
 Leia o CLAUDE.md e agents/backend.md. Implemente o módulo de automações em apps/api/src/modules/automations: CRUD de AutomationFlow com nodes JSONB (mensagem, condição, delay, atribuir, tag, webhook, fim), gatilhos: new_conversation, keyword, schedule, field_changed. Implemente o AutomationEngine em apps/worker/src/services/automation-engine.service.ts que avalia e executa os nós do flow quando um gatilho é disparado. Aplique @RequireFeature('flowBuilder'). Crie DTOs, Swagger e testes spec.
 ```
 
----------------------------------------------------
+---
 
 ## Fase 7 — Inteligência Artificial
 > Bot automático, co-pilot e análise de sentimento.
@@ -247,7 +247,7 @@ Leia o CLAUDE.md e agents/backend.md. Implemente o Mood AI: integre o analyzeSen
 Leia o CLAUDE.md e agents/backend.md. Implemente o AI Co-Pilot: endpoint POST /conversations/:id/ai/suggest que retorna sugestão de resposta baseada no histórico da conversa, endpoint POST /conversations/:id/ai/summarize que retorna resumo em 3 bullets, endpoint POST /conversations/:id/ai/intent que retorna a intenção detectada (suporte, compra, cancelamento, reclamação, dúvida). Aplique @RequireFeature('aiCopilot'). Integre os três na UI do inbox: botão "Sugerir resposta" no campo de chat que preenche o textarea, botão "Resumir" no painel lateral. Crie testes spec.
 ```
 
----
+---------------------------------------------------
 
 ## Fase 8 — Dashboard e Super Admin
 > Métricas, relatórios e painel de gestão de tenants.

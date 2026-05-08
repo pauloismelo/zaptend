@@ -24,6 +24,13 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   async handleConnection(client: Socket) {
     try {
+      const workerSecret = (client.handshake.auth as Record<string, string>)?.workerSecret
+      if (workerSecret && workerSecret === (process.env.WORKER_SECRET ?? '')) {
+        client.data.worker = true
+        this.logger.log(`Worker ${client.id} conectado`)
+        return
+      }
+
       const token =
         (client.handshake.auth as Record<string, string>)?.token ??
         client.handshake.headers?.authorization?.replace('Bearer ', '')
@@ -35,6 +42,9 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       const payload = this.jwtService.verify<JwtPayload>(token)
       client.data.user = payload
       client.join(`tenant:${payload.tenantId}`)
+      if (['supervisor', 'admin', 'owner'].includes(payload.role)) {
+        client.join(`tenant:${payload.tenantId}:supervisors`)
+      }
 
       this.logger.log(`Cliente ${client.id} conectado — tenant ${payload.tenantId}`)
     } catch {
@@ -76,6 +86,18 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       userId: user.sub,
       isTyping: true,
     })
+  }
+
+  @SubscribeMessage('worker:emit')
+  handleWorkerEmit(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { tenantId: string; event: string; data: unknown },
+  ) {
+    if (!client.data.worker) return
+    const room = data.event === 'supervisor:alert'
+      ? `tenant:${data.tenantId}:supervisors`
+      : `tenant:${data.tenantId}`
+    this.server.to(room).emit(data.event, data.data)
   }
 
   @SubscribeMessage('typing:stop')

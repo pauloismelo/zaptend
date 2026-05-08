@@ -21,6 +21,7 @@ import { BillingModule } from './modules/billing/billing.module'
 import { QuickRepliesModule } from './modules/quick-replies/quick-replies.module'
 import { BroadcastsModule } from './modules/broadcasts/broadcasts.module'
 import { AutomationsModule } from './modules/automations/automations.module'
+import { AiModule } from './modules/ai/ai.module'
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AutomationsModule } from './modules/automations/automations.module'
     QuickRepliesModule,
     BroadcastsModule,
     AutomationsModule,
+    AiModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

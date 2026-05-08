@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useRef, useCallback, type KeyboardEvent } from 'react'
-import { Send, Paperclip, Smile, X } from 'lucide-react'
+import { Loader2, Paperclip, Send, Smile, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMessagesStore } from '@/stores/messages.store'
+import { useAiCopilotStore } from '@/stores/ai-copilot.store'
 import type { ConversationId } from '@zaptend/types'
 
 const EMOJIS = [
@@ -33,6 +34,7 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { sendMessage } = useMessagesStore()
+  const { isSuggesting, suggestReply } = useAiCopilotStore()
 
   const quickRepliesVisible = text.startsWith('/')
   const filteredReplies = quickRepliesVisible
@@ -77,6 +79,17 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
   const selectQuickReply = (replyText: string) => {
     setText(replyText)
     textareaRef.current?.focus()
+  }
+
+  const handleSuggest = async () => {
+    if (isSuggesting) return
+    try {
+      const suggestion = await suggestReply(conversationId)
+      setText(suggestion)
+      textareaRef.current?.focus()
+    } catch {
+      // erro exposto na store do co-pilot
+    }
   }
 
   return (
@@ -133,6 +146,19 @@ export function MessageInput({ conversationId, onMessageSent }: MessageInputProp
       )}
 
       <div className="flex items-end gap-2">
+        <button
+          type="button"
+          aria-label="Sugerir resposta"
+          onClick={handleSuggest}
+          disabled={isSuggesting}
+          className={cn(
+            'flex-shrink-0 p-2 transition-colors',
+            isSuggesting ? 'text-muted-foreground cursor-wait' : 'text-primary hover:text-primary/80',
+          )}
+        >
+          {isSuggesting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+        </button>
+
         <button
           type="button"
           aria-label="Anexar arquivo"

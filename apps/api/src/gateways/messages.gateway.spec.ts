@@ -67,6 +67,28 @@ describe('MessagesGateway', () => {
       expect(mockSocket.join).toHaveBeenCalledWith('tenant:tenant-2')
     })
 
+    it('deve colocar supervisores na sala de alertas', async () => {
+      const payload = { sub: 'user-3', tenantId: 'tenant-1', email: 's@b.com', role: 'supervisor', tenantSlug: 's' }
+      jwtServiceMock.verify.mockReturnValue(payload)
+      mockSocket.handshake.auth = { token: 'valid-token' }
+
+      await gateway.handleConnection(mockSocket as never)
+
+      expect(mockSocket.join).toHaveBeenCalledWith('tenant:tenant-1')
+      expect(mockSocket.join).toHaveBeenCalledWith('tenant:tenant-1:supervisors')
+    })
+
+    it('deve autenticar worker via workerSecret', async () => {
+      process.env.WORKER_SECRET = 'worker-secret'
+      mockSocket.handshake.auth = { workerSecret: 'worker-secret' }
+
+      await gateway.handleConnection(mockSocket as never)
+
+      expect(mockSocket.data.worker).toBe(true)
+      expect(jwtServiceMock.verify).not.toHaveBeenCalled()
+      expect(mockSocket.disconnect).not.toHaveBeenCalled()
+    })
+
     it('deve desconectar quando nenhum token fornecido', async () => {
       mockSocket.handshake.auth = {}
       mockSocket.handshake.headers = {}
@@ -146,6 +168,34 @@ describe('MessagesGateway', () => {
         userId: 'user-1',
         isTyping: false,
       })
+    })
+  })
+
+  describe('handleWorkerEmit', () => {
+    it('deve retransmitir evento do worker para sala do tenant', () => {
+      mockSocket.data.worker = true
+
+      gateway.handleWorkerEmit(mockSocket as never, {
+        tenantId: 'tenant-1',
+        event: 'message:new',
+        data: { id: 'msg-1' },
+      })
+
+      expect(mockServer.to).toHaveBeenCalledWith('tenant:tenant-1')
+      expect(mockServer.emit).toHaveBeenCalledWith('message:new', { id: 'msg-1' })
+    })
+
+    it('deve enviar supervisor:alert apenas para sala de supervisores', () => {
+      mockSocket.data.worker = true
+
+      gateway.handleWorkerEmit(mockSocket as never, {
+        tenantId: 'tenant-1',
+        event: 'supervisor:alert',
+        data: { conversationId: 'conv-1' },
+      })
+
+      expect(mockServer.to).toHaveBeenCalledWith('tenant:tenant-1:supervisors')
+      expect(mockServer.emit).toHaveBeenCalledWith('supervisor:alert', { conversationId: 'conv-1' })
     })
   })
 

@@ -15,6 +15,13 @@ export interface SendTemplateOptions {
   variables?: Record<string, unknown>
 }
 
+export interface SendTextOptions {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  text: string
+}
+
 @Injectable()
 export class MetaApiService {
   private readonly logger = new Logger(MetaApiService.name)
@@ -90,6 +97,31 @@ export class MetaApiService {
     if (!response.ok) {
       const details = await response.text()
       throw new Error(`Falha ao enviar template ${options.templateName}: ${response.status} ${details}`)
+    }
+
+    return (await response.json()) as Record<string, unknown>
+  }
+
+  async sendText(options: SendTextOptions): Promise<Record<string, unknown>> {
+    const url = `https://graph.facebook.com/${this.apiVersion}/${options.phoneNumberId}/messages`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: options.to,
+        type: 'text',
+        text: { preview_url: false, body: options.text },
+      }),
+    })
+
+    if (!response.ok) {
+      const details = await response.text()
+      throw new Error(`Falha ao enviar texto: ${response.status} ${details}`)
     }
 
     return (await response.json()) as Record<string, unknown>

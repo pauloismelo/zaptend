@@ -1,7 +1,9 @@
 'use client'
 
-import { Phone, Mail, Building, User, Clock, MessageSquare } from 'lucide-react'
+import { useEffect } from 'react'
+import { Brain, Clock, FileText, Loader2, Mail, MessageSquare, Phone, Sparkles, User, Building } from 'lucide-react'
 import { useConversationsStore } from '@/stores/conversations.store'
+import { useAiCopilotStore } from '@/stores/ai-copilot.store'
 import { getInitials } from './conversation-item'
 import type { ConversationStatus } from '@zaptend/types'
 
@@ -48,7 +50,21 @@ function DetailRow({ icon: Icon, label, value }: DetailRowProps) {
 
 export function ContactDetails() {
   const { conversations, activeConversationId } = useConversationsStore()
+  const {
+    summary,
+    intent,
+    isSummarizing,
+    isDetectingIntent,
+    error,
+    summarize,
+    detectIntent,
+    clear,
+  } = useAiCopilotStore()
   const conversation = conversations.find((c) => c.id === activeConversationId) ?? null
+
+  useEffect(() => {
+    clear()
+  }, [activeConversationId, clear])
 
   if (!conversation) {
     return (
@@ -128,6 +144,51 @@ export function ContactDetails() {
         <div className="flex flex-wrap gap-1" data-testid="tags-container">
           <span className="text-xs text-muted-foreground">Nenhuma tag</span>
         </div>
+      </div>
+
+      <div className="px-4 py-3 border-t border-border">
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+          AI Co-Pilot
+        </h4>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => summarize(conversation.id)}
+            disabled={isSummarizing}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+          >
+            {isSummarizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            Resumir
+          </button>
+          <button
+            type="button"
+            onClick={() => detectIntent(conversation.id)}
+            disabled={isDetectingIntent}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+          >
+            {isDetectingIntent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+            Detectar intenção
+          </button>
+        </div>
+
+        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+
+        {summary.length > 0 && (
+          <ul className="mt-3 space-y-2" data-testid="ai-summary">
+            {summary.map((item) => (
+              <li key={item} className="flex gap-2 text-sm text-foreground">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {intent && (
+          <div className="mt-3 rounded-md bg-primary/10 px-3 py-2 text-sm text-primary" data-testid="ai-intent">
+            Intenção: {intent}
+          </div>
+        )}
       </div>
     </div>
   )

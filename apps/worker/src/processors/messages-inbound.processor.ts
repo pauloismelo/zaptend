@@ -8,6 +8,7 @@ import { MetaApiService } from '../services/meta-api.service'
 import { S3Service } from '../services/s3.service'
 import { SocketEmitterService } from '../services/socket-emitter.service'
 import { RoutingService } from '../services/routing.service'
+import { WorkerAiService } from '../services/ai.service'
 import { QUEUE_MESSAGES_INBOUND } from '../app.module'
 
 const MEDIA_TYPES = new Set(['image', 'audio', 'video', 'document', 'sticker'])
@@ -22,6 +23,7 @@ export class MessagesInboundProcessor extends WorkerHost {
     private readonly s3: S3Service,
     private readonly socketEmitter: SocketEmitterService,
     private readonly routing: RoutingService,
+    private readonly ai: WorkerAiService,
   ) {
     super()
   }
@@ -116,6 +118,11 @@ export class MessagesInboundProcessor extends WorkerHost {
       replyToId = replyTo?.id
     }
 
+    const content = this.extractContent(message)
+    const sentiment = content
+      ? await this.ai.analyzeSentiment(content)
+      : { sentiment: 'neutral' as const, score: 0.5 }
+
     // 5. Criar a Message no banco
     const dbMessage = await this.prisma.message.create({
       data: {
@@ -124,7 +131,7 @@ export class MessagesInboundProcessor extends WorkerHost {
         waMessageId: message.id,
         direction: 'inbound',
         type: message.type,
-        content: this.extractContent(message),
+        content,
         mediaUrl: mediaUrl ?? undefined,
         mediaType: this.extractMediaMimeType(message),
         latitude: message.location?.latitude,
@@ -132,6 +139,8 @@ export class MessagesInboundProcessor extends WorkerHost {
         reactionEmoji: message.reaction?.emoji,
         replyToId,
         status: 'delivered',
+        sentiment: sentiment.sentiment,
+        sentimentScore: sentiment.score,
         sentAt,
       },
     })
@@ -157,10 +166,122 @@ export class MessagesInboundProcessor extends WorkerHost {
       message: dbMessage,
     })
 
+    await this.emitMoodAlertIfNeeded(tenantId, conversation.id)
+
+    if (!conversation.assignedUserId && content) {
+      const botHandled = await this.tryBotResponse(tenantId, conversation.id, contact.phone, content)
+      if (botHandled) return
+    }
+
     // 7. Aplicar roteamento automático se conversa sem atribuição
     if (!conversation.assignedUserId) {
       await this.routing.assignConversation(tenantId, conversation.id)
     }
+  }
+
+  private async tryBotResponse(
+    tenantId: string,
+    conversationId: string,
+    to: string,
+    inboundText: string,
+  ): Promise<boolean> {
+    const config = await this.prisma.whatsAppConfig.findFirst({
+      where: withTenant(tenantId, { isActive: true, botEnabled: true }),
+      select: {
+        phoneNumberId: true,
+        accessTokenEncrypted: true,
+        botSystemPrompt: true,
+        welcomeMessage: true,
+      },
+    })
+    if (!config) return false
+
+    const history = await this.prisma.message.findMany({
+      where: { tenantId, conversationId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { direction: true, content: true },
+    })
+
+    const botResponse = await this.ai.generateBotResponse(
+      tenantId,
+      inboundText,
+      history
+        .reverse()
+        .filter((item) => item.content)
+        .map((item) => ({
+          role: item.direction === 'inbound' ? 'user' as const : 'assistant' as const,
+          content: item.content ?? '',
+        })),
+      { systemPrompt: config.botSystemPrompt, welcomeMessage: config.welcomeMessage },
+    )
+
+    if (botResponse.handoffRequested) {
+      await this.prisma.conversationEvent.create({
+        data: {
+          conversationId,
+          type: 'bot_handoff',
+          metadata: { reason: 'HANDOFF_REQUESTED' },
+        },
+      })
+      await this.routing.assignConversation(tenantId, conversationId)
+      return true
+    }
+
+    if (!botResponse.text) return false
+
+    const metaResponse = await this.metaApi.sendText({
+      phoneNumberId: config.phoneNumberId,
+      accessToken: config.accessTokenEncrypted,
+      to,
+      text: botResponse.text,
+    })
+    const waMessageId = this.extractWaMessageId(metaResponse)
+    const outbound = await this.prisma.message.create({
+      data: {
+        tenantId,
+        conversationId,
+        waMessageId,
+        direction: 'outbound',
+        type: 'text',
+        content: botResponse.text,
+        status: 'sent',
+        isBot: true,
+        sentAt: new Date(),
+      },
+    })
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date() },
+    })
+    this.socketEmitter.emitToTenant(tenantId, 'message:new', { conversationId, message: outbound })
+    return true
+  }
+
+  private async emitMoodAlertIfNeeded(tenantId: string, conversationId: string) {
+    const latest = await this.prisma.message.findMany({
+      where: { tenantId, conversationId, direction: 'inbound' },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { sentiment: true },
+    })
+    if (latest.length < 3) return
+
+    const shouldAlert = latest.every((message) => (
+      message.sentiment === 'negative' || message.sentiment === 'urgent'
+    ))
+    if (!shouldAlert) return
+
+    this.socketEmitter.emitToTenant(tenantId, 'supervisor:alert', {
+      conversationId,
+      reason: 'negative_sentiment_sequence',
+      severity: latest.some((message) => message.sentiment === 'urgent') ? 'urgent' : 'negative',
+    })
+  }
+
+  private extractWaMessageId(response: Record<string, unknown>): string | undefined {
+    const messages = response.messages as Array<{ id?: string }> | undefined
+    return messages?.[0]?.id
   }
 
   private async resolveMediaUrl(

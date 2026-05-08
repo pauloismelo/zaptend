@@ -7,8 +7,9 @@ import { MetaApiService } from '../services/meta-api.service'
 import { S3Service } from '../services/s3.service'
 import { SocketEmitterService } from '../services/socket-emitter.service'
 import { RoutingService } from '../services/routing.service'
+import { WorkerAiService } from '../services/ai.service'
 import { QUEUE_MESSAGES_INBOUND } from '../app.module'
-import type { InboundMessageJobPayload } from '@zaptend/types'
+import type { InboundMessageJobPayload, WhatsAppInboundMessage } from '@zaptend/types'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,11 @@ const prismaMock = {
   message: {
     create: jest.fn(),
     findUnique: jest.fn(),
+    findMany: jest.fn(),
     update: jest.fn(),
+  },
+  conversationEvent: {
+    create: jest.fn(),
   },
   whatsAppConfig: {
     findFirst: jest.fn(),
@@ -33,6 +38,7 @@ const prismaMock = {
 
 const metaApiMock = {
   downloadMedia: jest.fn(),
+  sendText: jest.fn(),
 }
 
 const s3Mock = {
@@ -45,6 +51,11 @@ const socketEmitterMock = {
 
 const routingMock = {
   assignConversation: jest.fn(),
+}
+
+const aiMock = {
+  analyzeSentiment: jest.fn(),
+  generateBotResponse: jest.fn(),
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -73,7 +84,7 @@ const makeImageMessage = () => ({
 })
 
 const makePayload = (
-  messages: ReturnType<typeof makeTextMessage>[],
+  messages: WhatsAppInboundMessage[],
   statuses: { id: string; status: string; timestamp: string; recipient_id: string }[] = [],
 ): Job<InboundMessageJobPayload> =>
   ({
@@ -116,11 +127,19 @@ describe('MessagesInboundProcessor', () => {
         { provide: S3Service, useValue: s3Mock },
         { provide: SocketEmitterService, useValue: socketEmitterMock },
         { provide: RoutingService, useValue: routingMock },
+        { provide: WorkerAiService, useValue: aiMock },
         { provide: getQueueToken(QUEUE_MESSAGES_INBOUND), useValue: {} },
       ],
     }).compile()
 
     processor = module.get<MessagesInboundProcessor>(MessagesInboundProcessor)
+  })
+
+  beforeEach(() => {
+    aiMock.analyzeSentiment.mockResolvedValue({ sentiment: 'neutral', score: 0.5 })
+    aiMock.generateBotResponse.mockResolvedValue({ text: 'Olá! Como posso ajudar?', handoffRequested: false })
+    prismaMock.message.findMany.mockResolvedValue([])
+    metaApiMock.sendText.mockResolvedValue({ messages: [{ id: 'wamid.bot' }] })
   })
 
   afterEach(() => jest.clearAllMocks())
@@ -152,6 +171,103 @@ describe('MessagesInboundProcessor', () => {
         'message:new',
         expect.objectContaining({ conversationId: CONVERSATION_ID }),
       )
+      expect(aiMock.analyzeSentiment).toHaveBeenCalledWith('Olá, tudo bem?')
+      expect(prismaMock.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sentiment: 'neutral', sentimentScore: 0.5 }),
+        }),
+      )
+    })
+
+    it('deve enviar resposta automática quando bot está ativo e conversa não atribuída', async () => {
+      prismaMock.contact.upsert.mockResolvedValue(mockContact)
+      prismaMock.conversation.findFirst.mockResolvedValue(mockConversation)
+      prismaMock.message.create
+        .mockResolvedValueOnce(mockMessage)
+        .mockResolvedValueOnce({ id: 'msg-bot', conversationId: CONVERSATION_ID, isBot: true })
+      prismaMock.message.findUnique.mockResolvedValue(null)
+      prismaMock.message.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ direction: 'inbound', content: 'Olá' }])
+      prismaMock.conversation.update.mockResolvedValue(mockConversation)
+      prismaMock.whatsAppConfig.findFirst.mockResolvedValue({
+        phoneNumberId: 'phone-1',
+        accessTokenEncrypted: 'token',
+        botSystemPrompt: 'Prompt do tenant',
+        welcomeMessage: null,
+      })
+
+      await processor.process(makePayload([makeTextMessage()]))
+
+      expect(aiMock.generateBotResponse).toHaveBeenCalled()
+      expect(metaApiMock.sendText).toHaveBeenCalledWith({
+        phoneNumberId: 'phone-1',
+        accessToken: 'token',
+        to: '5511999999999',
+        text: 'Olá! Como posso ajudar?',
+      })
+      expect(prismaMock.message.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isBot: true, content: 'Olá! Como posso ajudar?' }),
+        }),
+      )
+      expect(routingMock.assignConversation).not.toHaveBeenCalled()
+    })
+
+    it('deve emitir alerta quando há 3 sentimentos negativos consecutivos', async () => {
+      prismaMock.contact.upsert.mockResolvedValue(mockContact)
+      prismaMock.conversation.findFirst.mockResolvedValue(mockConversation)
+      prismaMock.message.create.mockResolvedValue(mockMessage)
+      prismaMock.message.findUnique.mockResolvedValue(null)
+      prismaMock.conversation.update.mockResolvedValue(mockConversation)
+      prismaMock.whatsAppConfig.findFirst.mockResolvedValue(null)
+      prismaMock.message.findMany.mockResolvedValue([
+        { sentiment: 'negative' },
+        { sentiment: 'urgent' },
+        { sentiment: 'negative' },
+      ])
+
+      await processor.process(makePayload([makeTextMessage()]))
+
+      expect(socketEmitterMock.emitToTenant).toHaveBeenCalledWith(
+        TENANT_ID,
+        'supervisor:alert',
+        {
+          conversationId: CONVERSATION_ID,
+          reason: 'negative_sentiment_sequence',
+          severity: 'urgent',
+        },
+      )
+    })
+
+    it('deve transferir para humano quando bot retorna HANDOFF_REQUESTED', async () => {
+      aiMock.generateBotResponse.mockResolvedValue({ text: 'Vou transferir.', handoffRequested: true })
+      prismaMock.contact.upsert.mockResolvedValue(mockContact)
+      prismaMock.conversation.findFirst.mockResolvedValue(mockConversation)
+      prismaMock.message.create.mockResolvedValue(mockMessage)
+      prismaMock.message.findUnique.mockResolvedValue(null)
+      prismaMock.message.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ direction: 'inbound', content: 'Preciso de humano' }])
+      prismaMock.conversation.update.mockResolvedValue(mockConversation)
+      prismaMock.whatsAppConfig.findFirst.mockResolvedValue({
+        phoneNumberId: 'phone-1',
+        accessTokenEncrypted: 'token',
+        botSystemPrompt: 'Prompt',
+        welcomeMessage: null,
+      })
+
+      await processor.process(makePayload([makeTextMessage()]))
+
+      expect(prismaMock.conversationEvent.create).toHaveBeenCalledWith({
+        data: {
+          conversationId: CONVERSATION_ID,
+          type: 'bot_handoff',
+          metadata: { reason: 'HANDOFF_REQUESTED' },
+        },
+      })
+      expect(routingMock.assignConversation).toHaveBeenCalledWith(TENANT_ID, CONVERSATION_ID)
+      expect(metaApiMock.sendText).not.toHaveBeenCalled()
     })
 
     it('deve processar múltiplas mensagens no mesmo job', async () => {

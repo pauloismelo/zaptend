@@ -2,16 +2,28 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MessageInput } from './message-input'
 import { useMessagesStore } from '@/stores/messages.store'
+import { useAiCopilotStore } from '@/stores/ai-copilot.store'
 
 const mockSendMessage = jest.fn()
+const mockSuggestReply = jest.fn()
+const mockedUseMessagesStore = useMessagesStore as unknown as jest.Mock
+const mockedUseAiCopilotStore = useAiCopilotStore as unknown as jest.Mock
 
 jest.mock('@/stores/messages.store', () => ({
   useMessagesStore: jest.fn(),
 }))
 
+jest.mock('@/stores/ai-copilot.store', () => ({
+  useAiCopilotStore: jest.fn(),
+}))
+
 function setup() {
-  ;(useMessagesStore as jest.Mock).mockReturnValue({
+  mockedUseMessagesStore.mockReturnValue({
     sendMessage: mockSendMessage,
+  })
+  mockedUseAiCopilotStore.mockReturnValue({
+    isSuggesting: false,
+    suggestReply: mockSuggestReply,
   })
 }
 
@@ -128,6 +140,18 @@ describe('MessageInput', () => {
     })
     await waitFor(() => {
       expect(onMessageSent).toHaveBeenCalled()
+    })
+  })
+
+  it('preenche textarea com sugestão do AI Co-Pilot', async () => {
+    mockSuggestReply.mockResolvedValue('Resposta sugerida pela IA')
+    render(<MessageInput conversationId="conv-1" />)
+
+    await userEvent.click(screen.getByLabelText('Sugerir resposta'))
+
+    await waitFor(() => {
+      expect(mockSuggestReply).toHaveBeenCalledWith('conv-1')
+      expect(screen.getByTestId('message-textarea')).toHaveValue('Resposta sugerida pela IA')
     })
   })
 

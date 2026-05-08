@@ -1,11 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import { ContactDetails } from './contact-details'
 import { useConversationsStore } from '@/stores/conversations.store'
+import { useAiCopilotStore } from '@/stores/ai-copilot.store'
 import type { Conversation } from '@/stores/conversations.store'
 
 jest.mock('@/stores/conversations.store', () => ({
   useConversationsStore: jest.fn(),
 }))
+
+jest.mock('@/stores/ai-copilot.store', () => ({
+  useAiCopilotStore: jest.fn(),
+}))
+
+const mockSummarize = jest.fn()
+const mockDetectIntent = jest.fn()
+const mockClear = jest.fn()
+const mockedUseConversationsStore = useConversationsStore as unknown as jest.Mock
+const mockedUseAiCopilotStore = useAiCopilotStore as unknown as jest.Mock
 
 const mockConv = (overrides: Partial<Conversation> = {}): Conversation => ({
   id: 'conv-1',
@@ -20,10 +31,20 @@ const mockConv = (overrides: Partial<Conversation> = {}): Conversation => ({
 })
 
 function setupStore(overrides: Partial<ReturnType<typeof useConversationsStore>> = {}) {
-  ;(useConversationsStore as jest.Mock).mockReturnValue({
+  mockedUseConversationsStore.mockReturnValue({
     conversations: [],
     activeConversationId: null,
     ...overrides,
+  })
+  mockedUseAiCopilotStore.mockReturnValue({
+    summary: [],
+    intent: null,
+    isSummarizing: false,
+    isDetectingIntent: false,
+    error: null,
+    summarize: mockSummarize,
+    detectIntent: mockDetectIntent,
+    clear: mockClear,
   })
 }
 
@@ -169,5 +190,39 @@ describe('ContactDetails', () => {
     })
     render(<ContactDetails />)
     expect(screen.getByText('Nenhuma tag')).toBeInTheDocument()
+  })
+
+  it('chama resumo do AI Co-Pilot', () => {
+    setupStore({
+      conversations: [mockConv()],
+      activeConversationId: 'conv-1',
+    })
+    render(<ContactDetails />)
+
+    screen.getByRole('button', { name: /Resumir/i }).click()
+
+    expect(mockSummarize).toHaveBeenCalledWith('conv-1')
+  })
+
+  it('exibe resumo e intenção do AI Co-Pilot', () => {
+    setupStore({
+      conversations: [mockConv()],
+      activeConversationId: 'conv-1',
+    })
+    mockedUseAiCopilotStore.mockReturnValue({
+      summary: ['Cliente pediu preço', 'Aguardando proposta', 'Sem risco'],
+      intent: 'compra',
+      isSummarizing: false,
+      isDetectingIntent: false,
+      error: null,
+      summarize: mockSummarize,
+      detectIntent: mockDetectIntent,
+      clear: mockClear,
+    })
+
+    render(<ContactDetails />)
+
+    expect(screen.getByTestId('ai-summary')).toBeInTheDocument()
+    expect(screen.getByTestId('ai-intent')).toHaveTextContent('Intenção: compra')
   })
 })
