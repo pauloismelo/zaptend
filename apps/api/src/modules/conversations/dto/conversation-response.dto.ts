@@ -38,6 +38,7 @@ export class ConversationResponseDto {
   @ApiPropertyOptional() subject: string | null
   @ApiProperty({ type: [String] }) tags: string[]
   @ApiPropertyOptional() pipelineStage: string | null
+  @ApiPropertyOptional() pipelineValue: string | number | null
   @ApiProperty() isBot: boolean
   @ApiPropertyOptional() slaDeadline: Date | null
   @ApiProperty() slaBreached: boolean

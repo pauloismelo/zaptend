@@ -9,6 +9,7 @@ import { ListConversationsDto } from './dto/list-conversations.dto'
 import { UpdateConversationDto } from './dto/update-conversation.dto'
 import { AssignConversationDto } from './dto/assign-conversation.dto'
 import { TransferConversationDto } from './dto/transfer-conversation.dto'
+import { CreateInternalNoteDto } from './dto/create-note.dto'
 import {
   ConversationResponseDto,
   PaginatedConversationsDto,
@@ -100,25 +101,71 @@ export class ConversationsService {
   }
 
   async update(id: string, tenantId: string, dto: UpdateConversationDto): Promise<ConversationResponseDto> {
-    await this.findOne(id, tenantId)
+    const current = await this.findOne(id, tenantId)
 
     const data: Record<string, unknown> = {}
     if (dto.status !== undefined) data.status = dto.status
     if (dto.assignedUserId !== undefined) data.assignedUserId = dto.assignedUserId
     if (dto.tags !== undefined) data.tags = dto.tags
     if (dto.pipelineStage !== undefined) data.pipelineStage = dto.pipelineStage
+    if (dto.pipelineValue !== undefined) data.pipelineValue = dto.pipelineValue
 
-    const updated = await this.prisma.conversation.update({
-      where: { id },
-      data,
-      include: {
-        contact: { select: { id: true, phone: true, name: true, avatarUrl: true, company: true, tags: true } },
-        assignedUser: { select: { id: true, name: true, avatarUrl: true, email: true } },
-      },
-    })
+    const events = []
+    if (dto.status !== undefined && dto.status !== current.status) {
+      events.push(this.prisma.conversationEvent.create({
+        data: { conversationId: id, type: 'status_changed', metadata: { from: current.status, to: dto.status } },
+      }))
+    }
+    if (dto.tags?.length) {
+      const previousTags = new Set((current.tags ?? []) as string[])
+      for (const tag of dto.tags) {
+        if (!previousTags.has(tag)) {
+          events.push(this.prisma.conversationEvent.create({
+            data: { conversationId: id, type: 'tag_added', metadata: { tag } },
+          }))
+        }
+      }
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.conversation.update({
+        where: { id },
+        data,
+        include: {
+          contact: { select: { id: true, phone: true, name: true, avatarUrl: true, company: true, tags: true } },
+          assignedUser: { select: { id: true, name: true, avatarUrl: true, email: true } },
+        },
+      }),
+      ...events,
+    ])
 
     this.logger.log(`Conversa ${id} atualizada pelo tenant ${tenantId}`)
     return this.toResponse(updated)
+  }
+
+  async createNote(id: string, tenantId: string, userId: string, dto: CreateInternalNoteDto) {
+    await this.findOne(id, tenantId)
+    return this.prisma.internalNote.create({
+      data: { conversationId: id, userId, content: dto.content },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    })
+  }
+
+  async listNotes(id: string, tenantId: string) {
+    await this.findOne(id, tenantId)
+    return this.prisma.internalNote.findMany({
+      where: { conversationId: id },
+      include: { user: { select: { id: true, name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async listEvents(id: string, tenantId: string) {
+    await this.findOne(id, tenantId)
+    return this.prisma.conversationEvent.findMany({
+      where: { conversationId: id },
+      orderBy: { createdAt: 'desc' },
+    })
   }
 
   async assign(
@@ -237,7 +284,7 @@ export class ConversationsService {
   }
 
   async resolve(id: string, tenantId: string, actorId: string): Promise<ConversationResponseDto> {
-    await this.findOne(id, tenantId)
+    const current = await this.findOne(id, tenantId)
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.conversation.update({
@@ -256,7 +303,7 @@ export class ConversationsService {
           conversationId: id,
           type: 'status_changed',
           actorId,
-          metadata: { from: 'open', to: 'resolved' },
+          metadata: { from: current.status, to: 'resolved' },
         },
       }),
     ])

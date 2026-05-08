@@ -24,6 +24,7 @@ import { ListConversationsDto } from './dto/list-conversations.dto'
 import { UpdateConversationDto } from './dto/update-conversation.dto'
 import { AssignConversationDto } from './dto/assign-conversation.dto'
 import { TransferConversationDto } from './dto/transfer-conversation.dto'
+import { CreateInternalNoteDto } from './dto/create-note.dto'
 import {
   ConversationResponseDto,
   PaginatedConversationsDto,
@@ -81,7 +82,7 @@ export class ConversationsController {
   @Roles('agent', 'supervisor', 'admin', 'owner')
   @ApiOperation({
     summary: 'Atualizar conversa',
-    description: 'Atualiza parcialmente: status, agente atribuído, tags e/ou pipeline stage.',
+    description: 'Atualiza parcialmente: status, agente atribuído, tags, etapa e/ou valor do pipeline.',
   })
   @ApiParam({ name: 'id', description: 'ID da conversa' })
   @ApiBody({ type: UpdateConversationDto })
@@ -95,6 +96,36 @@ export class ConversationsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<ConversationResponseDto> {
     return this.conversationsService.update(id, user.tenantId, dto)
+  }
+
+  @Post(':id/notes')
+  @Roles('agent', 'supervisor', 'admin', 'owner')
+  @ApiOperation({ summary: 'Criar nota interna' })
+  @ApiParam({ name: 'id', description: 'ID da conversa' })
+  @ApiBody({ type: CreateInternalNoteDto })
+  @ApiResponse({ status: 201, description: 'Nota criada' })
+  createNote(
+    @Param('id') id: string,
+    @Body() dto: CreateInternalNoteDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.conversationsService.createNote(id, user.tenantId, user.sub, dto)
+  }
+
+  @Get(':id/notes')
+  @Roles('agent', 'supervisor', 'admin', 'owner')
+  @ApiOperation({ summary: 'Listar notas internas' })
+  @ApiParam({ name: 'id', description: 'ID da conversa' })
+  listNotes(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.conversationsService.listNotes(id, user.tenantId)
+  }
+
+  @Get(':id/events')
+  @Roles('agent', 'supervisor', 'admin', 'owner')
+  @ApiOperation({ summary: 'Listar timeline de eventos da conversa' })
+  @ApiParam({ name: 'id', description: 'ID da conversa' })
+  listEvents(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.conversationsService.listEvents(id, user.tenantId)
   }
 
   @Post(':id/assign')

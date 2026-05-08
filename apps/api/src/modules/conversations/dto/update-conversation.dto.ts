@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsUUID, IsArray } from 'class-validator'
+import { Type } from 'class-transformer'
+import { IsString, IsOptional, IsEnum, IsUUID, IsArray, IsNumber, Min } from 'class-validator'
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { ConversationStatusEnum } from './conversation-status.enum'
 
@@ -23,4 +24,11 @@ export class UpdateConversationDto {
   @IsString()
   @IsOptional()
   pipelineStage?: string
+
+  @ApiPropertyOptional({ description: 'Valor estimado no pipeline' })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  pipelineValue?: number
 }

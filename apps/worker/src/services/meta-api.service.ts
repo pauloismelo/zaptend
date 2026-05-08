@@ -6,6 +6,15 @@ export interface MetaMediaResult {
   filename?: string
 }
 
+export interface SendTemplateOptions {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  templateName: string
+  languageCode?: string
+  variables?: Record<string, unknown>
+}
+
 @Injectable()
 export class MetaApiService {
   private readonly logger = new Logger(MetaApiService.name)
@@ -47,5 +56,42 @@ export class MetaApiService {
       buffer: Buffer.from(arrayBuffer),
       mimeType: mime_type,
     }
+  }
+
+  async sendTemplate(options: SendTemplateOptions): Promise<Record<string, unknown>> {
+    const url = `https://graph.facebook.com/${this.apiVersion}/${options.phoneNumberId}/messages`
+    const variableValues = Object.values(options.variables ?? {})
+      .filter((value) => value !== undefined && value !== null)
+      .map((value) => ({
+        type: 'text',
+        text: String(value),
+      }))
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: options.to,
+        type: 'template',
+        template: {
+          name: options.templateName,
+          language: { code: options.languageCode ?? 'pt_BR' },
+          ...(variableValues.length
+            ? { components: [{ type: 'body', parameters: variableValues }] }
+            : {}),
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      const details = await response.text()
+      throw new Error(`Falha ao enviar template ${options.templateName}: ${response.status} ${details}`)
+    }
+
+    return (await response.json()) as Record<string, unknown>
   }
 }

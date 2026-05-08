@@ -18,9 +18,11 @@ const prismaMock = {
   },
   conversationEvent: {
     create: jest.fn(),
+    findMany: jest.fn(),
   },
   internalNote: {
     create: jest.fn(),
+    findMany: jest.fn(),
   },
   $transaction: jest.fn(),
 }
@@ -205,9 +207,15 @@ describe('ConversationsService', () => {
         ...mockConversation,
         tags: ['vip', 'urgente'],
       })
+      prismaMock.$transaction.mockResolvedValue([
+        { ...mockConversation, tags: ['vip', 'urgente'] },
+        {},
+        {},
+      ])
 
       const result = await service.update('conv-1', 'tenant-a', { tags: ['vip', 'urgente'] })
 
+      expect(prismaMock.$transaction).toHaveBeenCalled()
       expect(prismaMock.conversation.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'conv-1' },
@@ -232,6 +240,41 @@ describe('ConversationsService', () => {
       await expect(service.update('conv-1', 'tenant-b', { status: 'resolved' as any })).rejects.toThrow(
         NotFoundException,
       )
+    })
+  })
+
+  describe('notes e timeline', () => {
+    it('deve criar nota interna na conversa do tenant', async () => {
+      prismaMock.conversation.findFirst.mockResolvedValue(mockConversation)
+      prismaMock.internalNote.create.mockResolvedValue({ id: 'note-1', content: 'Cliente pediu retorno' })
+
+      const result = await service.createNote('conv-1', 'tenant-a', 'user-1', {
+        content: 'Cliente pediu retorno',
+      })
+
+      expect(prismaMock.internalNote.create).toHaveBeenCalledWith({
+        data: { conversationId: 'conv-1', userId: 'user-1', content: 'Cliente pediu retorno' },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      })
+      expect(result).toEqual({ id: 'note-1', content: 'Cliente pediu retorno' })
+    })
+
+    it('deve listar eventos da timeline somente após validar tenant', async () => {
+      prismaMock.conversation.findFirst.mockResolvedValue(mockConversation)
+      prismaMock.conversationEvent.findMany.mockResolvedValue([
+        { id: 'event-1', type: 'assigned' },
+      ])
+
+      const result = await service.listEvents('conv-1', 'tenant-a')
+
+      expect(prismaMock.conversation.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'conv-1', tenantId: 'tenant-a', deletedAt: null } }),
+      )
+      expect(prismaMock.conversationEvent.findMany).toHaveBeenCalledWith({
+        where: { conversationId: 'conv-1' },
+        orderBy: { createdAt: 'desc' },
+      })
+      expect(result).toHaveLength(1)
     })
   })
 

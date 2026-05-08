@@ -12,6 +12,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
     "@hookform/resolvers": "^3.9.0",
     "@zaptend/types": "workspace:*",
     "@zaptend/ui": "workspace:*",

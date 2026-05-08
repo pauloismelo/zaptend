@@ -7,11 +7,14 @@ import { MetaApiService } from './services/meta-api.service'
 import { S3Service } from './services/s3.service'
 import { SocketEmitterService } from './services/socket-emitter.service'
 import { RoutingService } from './services/routing.service'
+import { BroadcastProcessor } from './processors/broadcast.processor'
+import { AutomationEngineService } from './services/automation-engine.service'
 
 export const QUEUE_MESSAGES_INBOUND = 'messages-inbound'
 export const QUEUE_MESSAGES_OUTBOUND = 'messages-outbound'
 export const QUEUE_NOTIFICATIONS = 'notifications'
 export const QUEUE_BILLING = 'billing'
+export const QUEUE_BROADCAST_SEND = 'broadcast-send'
 
 @Module({
   imports: [
@@ -32,6 +35,7 @@ export const QUEUE_BILLING = 'billing'
       { name: QUEUE_MESSAGES_OUTBOUND },
       { name: QUEUE_NOTIFICATIONS },
       { name: QUEUE_BILLING },
+      { name: QUEUE_BROADCAST_SEND },
     ),
   ],
   providers: [
@@ -40,7 +44,9 @@ export const QUEUE_BILLING = 'billing'
     S3Service,
     SocketEmitterService,
     RoutingService,
+    AutomationEngineService,
     MessagesInboundProcessor,
+    BroadcastProcessor,
   ],
 })
 export class AppModule {}

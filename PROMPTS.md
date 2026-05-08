@@ -181,7 +181,7 @@ Leia o CLAUDE.md e agents/whatsapp-infra-billing-reviewer.md (seção Billing). 
 Leia o CLAUDE.md e agents/frontend.md. Implemente a página de billing em apps/web/src/app/(tenant)/[slug]/settings/billing: exibição do plano atual, data de renovação, uso do mês (conversas, broadcasts) com barra de progresso, botão de upgrade com redirecionamento para checkout Stripe, histórico de faturas, botão de cancelamento. Crie billing.store.ts com Zustand. Use lucide-react e Tailwind. Crie spec para os componentes e a store.
 ```
 
----------------------------------------------------
+---
 
 ## Fase 6 — Features Avançadas
 > Kanban, broadcasts e automações.
@@ -218,7 +218,7 @@ Leia o CLAUDE.md e agents/backend.md. Implemente o módulo de broadcasts em apps
 Leia o CLAUDE.md e agents/backend.md. Implemente o módulo de automações em apps/api/src/modules/automations: CRUD de AutomationFlow com nodes JSONB (mensagem, condição, delay, atribuir, tag, webhook, fim), gatilhos: new_conversation, keyword, schedule, field_changed. Implemente o AutomationEngine em apps/worker/src/services/automation-engine.service.ts que avalia e executa os nós do flow quando um gatilho é disparado. Aplique @RequireFeature('flowBuilder'). Crie DTOs, Swagger e testes spec.
 ```
 
----
+---------------------------------------------------
 
 ## Fase 7 — Inteligência Artificial
 > Bot automático, co-pilot e análise de sentimento.

@@ -18,6 +18,9 @@ import { GatewaysModule } from './gateways/gateways.module'
 import { UsersModule } from './modules/users/users.module'
 import { DepartmentsModule } from './modules/departments/departments.module'
 import { BillingModule } from './modules/billing/billing.module'
+import { QuickRepliesModule } from './modules/quick-replies/quick-replies.module'
+import { BroadcastsModule } from './modules/broadcasts/broadcasts.module'
+import { AutomationsModule } from './modules/automations/automations.module'
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { BillingModule } from './modules/billing/billing.module'
     UsersModule,
     DepartmentsModule,
     BillingModule,
+    QuickRepliesModule,
+    BroadcastsModule,
+    AutomationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
